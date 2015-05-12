@@ -4,21 +4,30 @@ import re
 
 last_operands = None
 
-def getOperandDescription(operand, load_operand=False):
-    if re.match(r"^[aAdD][0-7]$", operand):
+def get_operand_description(operand, load_operand=False):
+    global constants
+    if re.match(r"^[aA][0-7]$", operand):
         if load_operand:
-            return "the value in register " + operand
+            return "the address in the register " + operand
         else:
-            return "register " + operand
+            return "address register " + operand
+    if re.match(r"^[dD][0-7]$", operand):
+        if load_operand:
+            return "the value in the register " + operand
+        else:
+            return "data register " + operand
     if re.match(r"^\(.*\)$", operand):
         if load_operand:
-            return "the value at the address stored in " + operand[1:-1]
+            return "the value at the address stored in " + get_operand_description(operand[1:-1])
         else:
-            return "the memory at the address stored in " + operand[1:-1]
+            return "the memory at the address stored in " + get_operand_description(operand[1:-1])
     if re.match(r"^#\d+$", operand):
         return "the constant " + operand[1:]
     if re.match(r"^#\w+$", operand):
-        return "the address of the varialbe " + operand[1:]
+        if operand[1:].lower() in constants:
+            return "the constant " + operand[1:]
+        else:
+            return "the address of the varialbe " + operand[1:]
     if re.match(r"^\w+$", operand):
         return "the variable " + operand
     return ">>>>>>>>>>UNKNOWN CONSTRUCT<<<<<<<<<<"
@@ -27,8 +36,17 @@ def getOperandDescription(operand, load_operand=False):
 def construct_jump_comment(label, condition=None, operand0=None, operand1=None):
     comment = "Jump to label " + label
     if condition is not None:
-        comment += " if " + getOperandDescription(operand1, True) + " " + condition + " " + getOperandDescription(operand0, True)
+        comment += " if " + get_operand_description(operand1, True) + " " + condition + " " + get_operand_description(operand0, True)
     return comment
+
+def get_constants(lines):
+    constants = []
+    for line in lines:
+        line = re.sub(r"\s+", " ", line)
+        line = line.lower()
+        if "equ" in line:
+            constants.append(line[:line.find(" ")])
+    return constants
 
 
 def comment_line(orig_line):
@@ -52,14 +70,26 @@ def comment_line(orig_line):
         operands = None
     comment = None
 
-    if command.startswith("clr"):
-        comment = "Clear " + getOperandDescription(operands[0])
-    elif command.startswith("move"):
-        comment = "Store " + getOperandDescription(operands[0], True) + " into " + getOperandDescription(operands[1], False)
-    elif command.startswith("add"):
-        comment = "Add " + getOperandDescription(operands[0], True) + " and " + getOperandDescription(operands[1], True) + " and store the result into " + getOperandDescription(operands[1], False)
-    elif command.startswith("cmp"):
-        comment = "Compare " + getOperandDescription(operands[0], True) + " and " + getOperandDescription(operands[1], True)
+    if command.startswith("clr."):
+        comment = "Clear " + get_operand_description(operands[0])
+    elif command.startswith("move."):
+        comment = "Store " + get_operand_description(operands[0], True) + " into " + get_operand_description(operands[1], False)
+    elif command.startswith("add."):
+        if re.match(r"^#\d+$", operands[0]):
+            comment = "Increase " + get_operand_description(operands[1], True) + " by " + operands[0][1:]
+        else:
+            comment = "Add " + get_operand_description(operands[0], True) + " and " + get_operand_description(operands[1], True) + " and store the result into " + get_operand_description(operands[1], False)
+    elif command.startswith("sub."):
+        if re.match(r"^#\d+$", operands[0]):
+            comment = "Decrease " + get_operand_description(operands[1], True) + " by " + operands[0][1:]
+        elif "constant" in get_operand_description(operands[0]):
+            comment = "Subtract " + get_operand_description(operands[0], True) + " from " + get_operand_description(operands[1], True) + " and store the result into " + get_operand_description(operands[1], False)
+        else:
+            comment = "Subtract " + get_operand_description(operands[1], True) + " from " + get_operand_description(operands[0], True) + " and store the result into " + get_operand_description(operands[1], False)
+    elif command.startswith("or."):
+        comment = "Bitwise or " + get_operand_description(operands[0], True) + " and " + get_operand_description(operands[1], True) + " and store the result into " + get_operand_description(operands[1], False)
+    elif command.startswith("cmp."):
+        comment = "Compare " + get_operand_description(operands[0], True) + " and " + get_operand_description(operands[1], True)
     elif command.startswith("bra"):
         comment = construct_jump_comment(operands[0])
     elif command.startswith("beq"):
@@ -95,6 +125,8 @@ lines = ifile.read().split("\n")
 
 if ifile != sys.stdin:
     ifile.close()
+
+constants = get_constants(lines)
 
 lines = [comment_line(line) for line in lines]
 
