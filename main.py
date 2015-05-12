@@ -130,6 +130,27 @@ constants = get_constants(lines)
 
 lines = [comment_line(line) for line in lines]
 
+i = 0
+while i < len(lines):
+    if re.match(r"^\s*\S.*;", lines[i]):
+        start = i
+        linelength = re.search(r"\s*;", lines[i]).start()
+        i += 1
+        while i < len(lines) and re.match(r"^\s*\S.*;", lines[i]):
+            linelength = max(re.search(r"\s*;", lines[i]).start(), linelength)
+            i += 1
+        linelength += 4
+        for lineNr in range(start, i):
+            match = re.search(r"\s*;", lines[lineNr])
+            command = lines[lineNr][:match.start()]
+            comment = lines[lineNr][match.end() - 1:]
+            current_linelength = len(command)
+            for count in range(0, linelength - current_linelength):
+                command += " "
+            lines[lineNr] = command + comment
+    else:
+        i += 1
+
 if ofile == "-":
     ofile = sys.stdout
 else:
