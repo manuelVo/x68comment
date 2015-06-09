@@ -27,7 +27,7 @@ def get_operand_description(operand, load_operand=False):
         if operand[1:].lower() in constants:
             return "the constant " + operand[1:]
         else:
-            return "the address of the varialbe " + operand[1:]
+            return "the address of the variable " + operand[1:]
     if re.match(r"^\w+$", operand):
         return "the variable " + operand
     return ">>>>>>>>>>UNKNOWN CONSTRUCT<<<<<<<<<<"
