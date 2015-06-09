@@ -16,11 +16,11 @@ def get_operand_description(operand, load_operand=False):
             return "the value in the register " + operand
         else:
             return "data register " + operand
-    if re.match(r"^\(.*\)$", operand):
+    if re.match(r"^-?\(.*\)\+?$", operand):
         if load_operand:
-            return "the value at the address stored in " + get_operand_description(operand[1:-1])
+            return "the value at the address stored in " + get_operand_description(operand[operand.find("(") + 1:operand.find(")")])
         else:
-            return "the memory at the address stored in " + get_operand_description(operand[1:-1])
+            return "the memory at the address stored in " + get_operand_description(operand[operand.find("(") + 1:operand.find(")")])
     if re.match(r"^#\d+$", operand):
         return "the constant " + operand[1:]
     if re.match(r"^#\w+$", operand):
@@ -31,7 +31,6 @@ def get_operand_description(operand, load_operand=False):
     if re.match(r"^\w+$", operand):
         return "the variable " + operand
     return ">>>>>>>>>>UNKNOWN CONSTRUCT<<<<<<<<<<"
-
 
 def construct_jump_comment(label, condition=None, operand0=None, operand1=None):
     comment = "Jump to label " + label
@@ -86,21 +85,73 @@ def comment_line(orig_line):
             comment = "Subtract " + get_operand_description(operands[0], True) + " from " + get_operand_description(operands[1], True) + " and store the result into " + get_operand_description(operands[1], False)
         else:
             comment = "Subtract " + get_operand_description(operands[1], True) + " from " + get_operand_description(operands[0], True) + " and store the result into " + get_operand_description(operands[1], False)
+    elif command.startswith("div"):
+        comment = "Divide " + get_operand_description(operands[1], True) + " with " + get_operand_description(operands[0], True) + " and store the quotient in the right half and the remainder in the left half of " + get_operand_description(operands[1]);
     elif command.startswith("or."):
         comment = "Bitwise or " + get_operand_description(operands[0], True) + " and " + get_operand_description(operands[1], True) + " and store the result into " + get_operand_description(operands[1], False)
     elif command.startswith("cmp."):
         comment = "Compare " + get_operand_description(operands[0], True) + " and " + get_operand_description(operands[1], True)
+    elif command == "swap":
+        comment = "Swaps the first two and the last two bytes in " + get_operand_description(operands[0]);
     elif command.startswith("bra"):
         comment = construct_jump_comment(operands[0])
     elif command.startswith("beq"):
         comment = construct_jump_comment(operands[0], "==", last_operands[0], last_operands[1])
     elif command.startswith("ble"):
         comment = construct_jump_comment(operands[0], "<=", last_operands[0], last_operands[1])
+    elif command.startswith("bgt"):
+        comment = construct_jump_comment(operands[0], ">", last_operands[0], last_operands[1])
+    elif command == "bsr":
+        comment = "Call subroutine " + operands[0];
+    elif command == "rts":
+        comment = "Return from the subroutine"
     elif command.startswith("org"):
         address = parts[1][1:]
         comment = "Start at address " + address
         if int(address) > 9000:
             comment += " (it's over 9000!)"
+
+    length_suffix = command[command.find(".") + 1:]
+
+    if operands is not None:
+        if length_suffix == "b":
+            byte_length = 1
+        elif length_suffix == "w":
+            byte_length = 2
+        else:
+            byte_length = 4
+
+        op0_is_prefix = len(operands) > 1 and re.match(r"-\(.*\)", operands[0])
+        op1_is_prefix = len(operands) > 1 and re.match(r"-\(.*\)", operands[1])
+
+        if op0_is_prefix and op1_is_prefix:
+            prestring = "Decrease " + get_operand_description(operands[0][2:-1], True) + " and " + get_operand_description(operands[1][2:-1], True) + " by " + str(byte_length)
+            pass
+        elif op0_is_prefix:
+            prestring = "Decrease " + get_operand_description(operands[0][2:-1], True) + " by " + str(byte_length)
+            pass
+        elif op1_is_prefix:
+            prestring = "Decrease " + get_operand_description(operands[1][2:-1], True) + " by " + str(byte_length)
+            pass
+        if op0_is_prefix or op1_is_prefix:
+            comment = prestring + ". Then " + comment[0:1].lower() + comment[1:]
+
+        op0_is_suffix = len(operands) > 1 and re.match(r"\(.*\)+", operands[0]);
+        op1_is_suffix = len(operands) > 1 and re.match(r"\(.*\)+", operands[1]);
+        if op0_is_suffix and op1_is_suffix:
+            afterstring = "Afterwards increase " + get_operand_description(operands[0][1:-2], True) + " and " + get_operand_description(operands[1][1:-2], True) + " by " + str(byte_length)
+            pass
+        elif op0_is_suffix:
+            afterstring = "Afterwards increase " + get_operand_description(operands[0][1:-2], True) + " by " + str(byte_length)
+            pass
+        elif op1_is_suffix:
+            afterstring = "Afterwards increase " + get_operand_description(operands[1][1:-2], True) + " by " + str(byte_length)
+            pass
+        if op0_is_suffix or op1_is_suffix:
+            comment += ". " + afterstring
+
+
+
     last_operands = operands
 
     if comment is not None:
